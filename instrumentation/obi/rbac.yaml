@@ -3,6 +3,9 @@ apiVersion: v1
 kind: ServiceAccount
 metadata:
   name: obi
+  # Must match the namespace the DaemonSet runs in, otherwise the pod
+  # cannot start. The DaemonSet sets none, so it lands wherever your
+  # kubectl context points.
   namespace: default
 
 ---
@@ -11,7 +14,8 @@ kind: ClusterRole
 metadata:
   name: obi
 rules:
-  # Esto se ocupa para descubrir los pods para instrumentar
+  # Target discovery. Without this OBI still traces, but spans are
+  # labelled with bare PIDs instead of pod and service names.
   - apiGroups: [""]
     resources:
       - pods
@@ -23,7 +27,8 @@ rules:
       - list
       - watch
 
-  # Necesario para leer configuración de deployments
+  # Walks pod owners up to the Deployment, so a span reads
+  # "java17-service" rather than the ReplicaSet hash.
   - apiGroups: ["apps"]
     resources:
       - deployments
@@ -47,4 +52,4 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: obi
-    namespace: default  # O tu namespace
+    namespace: default  # Keep in sync with the ServiceAccount above.

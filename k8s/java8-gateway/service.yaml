@@ -7,6 +7,9 @@ metadata:
     app: java8-gateway
     tier: frontend
 spec:
+  # The only entry point into the application. Under minikube this also
+  # gets a NodePort, which is what `minikube service --url` returns; use
+  # `minikube tunnel` if you want a real external IP on port 80.
   type: LoadBalancer
   ports:
   - port: 80

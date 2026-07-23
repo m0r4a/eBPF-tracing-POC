@@ -14,37 +14,51 @@ spec:
       labels:
         app: beyla
     spec:
-      serviceAccountName: beyla # required if you want kubernetes metadata decoration
-      hostPID: true # Required to access the processes on the host
+      # Needed for the pod metadata lookups granted in rbac.yaml.
+      serviceAccountName: beyla
+      # Beyla attaches to processes in other pods, so it needs to see the
+      # host PID namespace. Together with privileged below, this is the
+      # trade you make for not touching the application.
+      hostPID: true
       containers:
         - name: beyla
-          image: grafana/beyla:latest
+          image: grafana/beyla:3.29.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
             readOnlyRootFilesystem: false
           env:
+            # Prints from inside the BPF programs. Very loud; useful only
+            # when probes are failing to attach.
             # - name: OTEL_EBPF_BPF_DEBUG
             #   value: "true"
+
             - name: BEYLA_LOG_LEVEL
               value: "DEBUG"
 
+            # Logs every span Beyla builds. Lets you tell "not tracing"
+            # apart from "tracing, but the export endpoint is wrong".
             - name: BEYLA_PRINT_TRACES
               value: "true"
 
+            # Enable if calls between pods on the same node go missing.
             # - name: BEYLA_BPF_TRACK_LOOPBACK
             #   value: "true"
 
             - name: BEYLA_CONFIG_PATH
               value: "/config/beyla-config.yml"
 
+            # Alternative to the namespace rule in the ConfigMap: select
+            # targets by executable path instead. Matches the path, so
+            # '*/java' works and '*.jar' never matches.
             # - name: BEYLA_AUTO_TARGET_EXE
             #   value: '*/java'
 
-              # required if you want kubernetes metadata decoration
+            # Puts pod, namespace and deployment names on spans.
             - name: BEYLA_KUBE_METADATA_ENABLE
               value: 'true'
 
+            # Free-form label; shows up as the cluster attribute on spans.
             - name: BEYLA_KUBE_CLUSTER_NAME
               value: 'minikube-poc'
 
@@ -54,11 +68,13 @@ spec:
             - mountPath: /var/run/beyla
               name: var-run-beyla
 
-            # pruebas para arreglar un error
+            # Where pinned BPF objects live. Bidirectional so pins made
+            # here stay visible on the node.
             - mountPath: /sys/fs/bpf
               name: sys-fs-bpf
               mountPropagation: Bidirectional
 
+            # Needed to attach probes via tracefs.
             - mountPath: /sys/kernel/debug
               name: sys-kernel-debug
 
@@ -71,6 +87,10 @@ spec:
         - name: sys-fs-bpf
           hostPath:
             path: /sys/fs/bpf
+            # Directory, not DirectoryOrCreate: the BPF filesystem must
+            # already be mounted or the pod stays pending on a mount
+            # error that says nothing about eBPF. ./minikube.sh create
+            # mounts it, but a minikube stop drops it again.
             type: Directory
         - name: sys-kernel-debug
           hostPath:

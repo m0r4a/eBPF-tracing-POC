@@ -9,4 +9,5 @@ spec:
   resources:
     requests:
       storage: 1Gi
+  # minikube's default class. Change it on any other cluster.
   storageClassName: standard

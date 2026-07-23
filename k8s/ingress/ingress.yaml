@@ -1,3 +1,6 @@
+# Optional. Nothing depends on this; the NodePort route is simpler.
+# Needs the nginx controller (`minikube addons enable ingress`) and an
+# /etc/hosts entry pointing ebpf-poc.local at the node IP.
 apiVersion: networking.k8s.io/v1
 kind: Ingress
 metadata:

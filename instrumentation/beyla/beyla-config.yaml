@@ -6,18 +6,27 @@ data:
   beyla-config.yml: |
     trace_printer: text
     otel_traces_export:
+      # In-cluster Jaeger from backends/jaeger/. For the Tempo stack
+      # instead, use http://host.minikube.internal:4317.
       endpoint: http://jaeger.tracing:4317
       protocol: grpc
       instrumentations: ["*"]
       sampler:
         name: parentbased_traceidratio
+        # Half the traces are dropped before export. Raise to "1.0" while
+        # debugging: a dropped span and a missing span look the same in
+        # the UI.
         arg: "0.5"
     discovery:
+      # Beyla can see every process on the node, so scope it or you will
+      # be tracing the control plane too.
       instrument:
         - k8s_namespace: 'ebpf-poc'
       exclude_instrument:
         - k8s_namespace: 'kube-system'
     attributes:
       select:
+        # Keep all attributes on database spans rather than the trimmed
+        # default set, so the query metadata survives.
         sql_client_duration:
           include: ['*']

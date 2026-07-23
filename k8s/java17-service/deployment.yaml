@@ -6,8 +6,10 @@ metadata:
   labels:
     app: java17-service
     tier: backend
-    version: "1.0.0"
+    version: "1.0.1"
 spec:
+  # Two replicas so consecutive requests do not necessarily hit the same
+  # JVM. Useful when comparing how agents attribute spans to processes.
   replicas: 2
   selector:
     matchLabels:
@@ -22,6 +24,9 @@ spec:
       containers:
       - name: java17-service
         image: m0r4a/java17-service:1.0.1
+        # Always, so a rebuilt image under the same tag is picked up. The
+        # flip side: a locally built 1.0.1 gets replaced by the registry
+        # copy. See apps/README.md if you are building your own.
         imagePullPolicy: Always
         ports:
         - containerPort: 8080
@@ -43,6 +48,8 @@ spec:
           limits:
             memory: "1Gi"
             cpu: "500m"
+        # Generous initial delays: Spring Boot on a cold cluster takes a
+        # while, and shorter values put the pods in a restart loop.
         livenessProbe:
           httpGet:
             path: /api/health

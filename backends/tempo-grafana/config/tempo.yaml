@@ -1,8 +1,13 @@
+# Tempo 3.0 in monolithic mode. The 3.0 release reorganised this file:
+# `ingester:` and `compactor:` are gone, and so is
+# `metrics_generator.traces_storage`. A 2.x config will not load.
 server:
   http_listen_port: 3200
   grpc_listen_port: 9096
   log_level: info
 
+# Receives spans from the agents. 0.0.0.0 so it accepts from outside the
+# container.
 distributor:
   receivers:
     otlp:
@@ -12,12 +17,13 @@ distributor:
         http:
           endpoint: 0.0.0.0:4318
 
-ingester:
-  max_block_duration: 5m
-
-compactor:
-  compaction:
-    block_retention: 12h
+# Tempo 3.0 replaced the `compactor:` block with a scheduler and worker
+# pair. In monolithic mode both run inside the single binary.
+backend_scheduler:
+  provider:
+    compaction:
+      compaction:
+        block_retention: 12h
 
 metrics_generator:
   registry:
@@ -26,9 +32,9 @@ metrics_generator:
       cluster: docker-compose
   storage:
     path: /var/tempo/generator/wal
-  traces_storage:
-    path: /var/tempo/generator/traces
 
+# Local disk, backed by the tempo-data-2 volume. Fine for a laptop, not
+# how you would run this for real.
 storage:
   trace:
     backend: local
@@ -40,5 +46,8 @@ storage:
 overrides:
   defaults:
     metrics_generator:
-      processors: [service-graphs, span-metrics, local-blocks] 
+      processors: [service-graphs, span-metrics, local-blocks]
       generate_native_histograms: both
+
+usage_report:
+  reporting_enabled: false

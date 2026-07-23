@@ -19,7 +19,7 @@ spec:
     spec:
       containers:
       - name: postgres
-        image: postgres:15-alpine
+        image: postgres:18-alpine
         ports:
         - containerPort: 5432
           name: postgres
@@ -29,8 +29,11 @@ spec:
         - secretRef:
             name: postgres-secret
         volumeMounts:
+        # Postgres 18 keeps its data in a version subdirectory under this
+        # path. The older /var/lib/postgresql/data mount makes the 18
+        # image refuse to start.
         - name: postgres-storage
-          mountPath: /var/lib/postgresql/data
+          mountPath: /var/lib/postgresql
           subPath: postgres
         resources:
           requests:
@@ -39,6 +42,8 @@ spec:
           limits:
             memory: "512Mi"
             cpu: "500m"
+        # pg_isready rather than a TCP check: Postgres accepts connections
+        # before it is ready to serve them.
         livenessProbe:
           exec:
             command:

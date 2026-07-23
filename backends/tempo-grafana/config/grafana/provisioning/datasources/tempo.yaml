@@ -1,3 +1,4 @@
+# Provisioned at startup so Grafana comes up with Tempo already wired in.
 apiVersion: 1
 
 datasources:
@@ -5,17 +6,22 @@ datasources:
     type: tempo
     access: proxy
     uid: tempo
+    # Container name on the compose network, not localhost.
     url: http://tempo:3200
     jsonData:
       httpMethod: GET
+      # The next three point at Loki and Prometheus datasources that this
+      # stack does not ship. Harmless while they are missing: the links
+      # just do not resolve. Add those datasources under these uids and
+      # the correlations start working.
       tracesToLogsV2:
-        datasourceUid: 'loki'  # Esto para despues
+        datasourceUid: 'loki'
         spanStartTimeShift: '-1h'
         spanEndTimeShift: '1h'
         filterByTraceID: true
         filterBySpanID: false
       tracesToMetrics:
-        datasourceUid: 'prometheus'  # También para después
+        datasourceUid: 'prometheus'
       serviceMap:
         datasourceUid: 'prometheus'
       nodeGraph:
@@ -28,6 +34,7 @@ datasources:
         timeShiftEnabled: true
         spanStartTimeShift: '1h'
         spanEndTimeShift: '-1h'
+      # Shows the request path on each span bar in the trace view.
       spanBar:
         type: 'Tag'
         tag: 'http.path'

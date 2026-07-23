@@ -1,24 +1,32 @@
 # Grafana Beyla
 
-Runs `grafana/beyla:latest` as a privileged DaemonSet with `hostPID: true`, so it can see every
-process on the node and attach to the two JVMs without touching them.
+Runs `grafana/beyla:3.29.0` as a privileged DaemonSet with `hostPID: true`, so it can see every
+process on the node and attach to both JVMs without touching them.
+
+Beyla 3.x is built on OBI internally, which you can see in its own logs. If you are comparing the two
+agents here, that is worth knowing before you read too much into small differences.
 
 ## Files
 
-- `rbac.yaml` gives the `beyla` ServiceAccount read access to pod metadata, which is what makes
-  spans come out labelled with Kubernetes names instead of bare PIDs.
+- `rbac.yaml` gives the `beyla` ServiceAccount read access to pod metadata, which is what puts
+  Kubernetes names on the spans instead of bare PIDs.
 - `beyla-config.yaml` is the ConfigMap Beyla reads from `/config/beyla-config.yml`.
 - `beyla.yaml` is the DaemonSet.
 
+Only `rbac.yaml` sets a namespace, and it hardcodes `default`. So Beyla ends up in `default` and
+watches `ebpf-poc` from there through the ClusterRole. If your kubectl context points somewhere else
+the ServiceAccount and the DaemonSet land in different namespaces and the pod will not start. Switch
+to `default` before applying, or change both files together.
+
 ## Deploy
 
-Bring up a destination first. As shipped the config points at in cluster Jaeger:
+Start a backend first. As shipped this points at Jaeger in the cluster:
 
 ```bash
 ../../backends/jaeger/jaeger.sh
 ```
 
-Then:
+That holds the terminal open doing a port forward, so give it its own. Then:
 
 ```bash
 kubectl apply -f rbac.yaml
@@ -27,24 +35,39 @@ kubectl apply -f beyla.yaml
 kubectl logs -f -l app=beyla
 ```
 
+Send traffic with `cd ../../k8s && ./traffic.sh --time 5`, then look for `java8-gateway` and
+`java17-service` at http://localhost:16686.
+
 ## Configuration
 
-Traces go to `http://jaeger.tracing:4317` over gRPC. To send them to the Tempo and Grafana stack
-in `backends/tempo-grafana/` instead, change `otel_traces_export.endpoint` in `beyla-config.yaml`
-to `http://host.minikube.internal:4317`, which is how the OBI setup reaches it.
+Traces go to `http://jaeger.tracing:4317` over gRPC. To send them to the Tempo and Grafana stack in
+`backends/tempo-grafana/` instead, change `otel_traces_export.endpoint` in `beyla-config.yaml` to
+`http://host.minikube.internal:4317`, which is how OBI reaches it.
 
-Discovery is scoped to the `ebpf-poc` namespace and explicitly excludes `kube-system`. Sampling is
-`parentbased_traceidratio` at 0.5, so half the traces are dropped. Raise `arg` to `"1.0"` while
-debugging, since a missing span and a sampled out span look identical from the UI.
+Discovery is scoped to the `ebpf-poc` namespace with `kube-system` excluded. Sampling is
+`parentbased_traceidratio` at 0.5, so half the traces are dropped. Set it to `"1.0"` while debugging,
+because a dropped span and a missing span look identical from the UI.
 
-`BEYLA_LOG_LEVEL` is `DEBUG` and `BEYLA_PRINT_TRACES` is on, which makes the DaemonSet logs verbose
-but means you can confirm Beyla is producing spans even when the destination is misconfigured.
+`BEYLA_LOG_LEVEL` is `DEBUG` and `BEYLA_PRINT_TRACES` is on. Noisy, but it means you can tell whether
+Beyla is producing spans even when the backend is misconfigured. If the logs show spans and Jaeger
+does not, the endpoint is wrong.
 
-`BEYLA_AUTO_TARGET_EXE` is commented out, so Beyla discovers targets by namespace rather than by
-executable name. The OBI setup takes the opposite approach and matches `*.jar`.
+`BEYLA_AUTO_TARGET_EXE` is commented out, so Beyla finds targets by namespace rather than by
+executable. OBI does it the other way around. If you do turn it on, note the pattern matches the
+executable path, so `*/java` works and `*.jar` does not.
+
+`BEYLA_KUBE_CLUSTER_NAME` is `minikube-poc` and shows up as the cluster attribute on spans. It does
+not have to match your minikube profile name.
 
 ## Requirements
 
-The DaemonSet mounts `/sys/fs/bpf` with `hostPath.type: Directory`, so the path must already exist
-on the node. `./minikube.sh create` at the repo root handles this. Without it the pod stays
-pending on a mount error rather than reporting anything about eBPF.
+The DaemonSet mounts two host paths, both `hostPath.type: Directory`, so both have to exist on the
+node already:
+
+- `/sys/fs/bpf`, mounted `Bidirectional`. `./minikube.sh create` sets this up, but it does not
+  survive a `minikube stop`. Redo it with `minikube ssh -- "sudo mount -t bpf bpf /sys/fs/bpf"`.
+- `/sys/kernel/debug`, which the minikube node image already has.
+
+If either is missing the pod sits there pending on a mount error and says nothing about eBPF, so
+check this first when the DaemonSet never comes up. OBI is more relaxed here and uses
+`DirectoryOrCreate` for `/sys/fs/bpf`.

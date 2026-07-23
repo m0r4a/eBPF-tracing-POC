@@ -14,11 +14,15 @@ spec:
       labels:
         app: obi
     spec:
-      serviceAccountName: obi # required if you want kubernetes metadata decoration
-      hostPID: true # Required to access the processes on the host
+      # Needed for the pod metadata lookups granted in rbac.yaml.
+      serviceAccountName: obi
+      # OBI attaches to processes in other pods, so it needs to see the
+      # host PID namespace. Together with privileged below, this is the
+      # trade you make for not touching the application.
+      hostPID: true
       containers:
         - name: obi
-          image: otel/ebpf-instrument:v0.9.0
+          image: otel/ebpf-instrument:v0.10.0
           imagePullPolicy: IfNotPresent
           securityContext:
             privileged: true
@@ -26,20 +30,25 @@ spec:
           env:
             - name: OTEL_EBPF_LOG_LEVEL
               value: "DEBUG"
+            # Prints from inside the BPF programs. Very loud; turn off
+            # unless you are debugging probe attachment.
             - name: OTEL_EBPF_BPF_DEBUG
               value: "true"
 
-            # tell OBI where to find the configuration file
             - name: OTEL_EBPF_CONFIG_PATH
               value: '/config/obi-config.yml'
 
+            # Matches the executable path, not the command line. The JVM
+            # runs as /opt/java/openjdk/bin/java, so the obvious-looking
+            # '*.jar' silently matches nothing.
             - name: OTEL_EBPF_AUTO_TARGET_EXE
-              value: '*.jar'
+              value: '*/java'
 
-              # required if you want kubernetes metadata decoration
+            # Puts pod, namespace and deployment names on spans.
             - name: OTEL_EBPF_KUBE_METADATA_ENABLE
               value: 'true'
 
+            # Free-form label; shows up as the cluster attribute on spans.
             - name: OTEL_EBPF_KUBE_CLUSTER_NAME
               value: 'minikube-poc'
 
@@ -49,11 +58,13 @@ spec:
             - mountPath: /var/run/obi
               name: var-run-obi
 
-            # pruebas para arreglar un error
+            # Where pinned BPF objects live. Bidirectional so pins made
+            # here stay visible on the node.
             - mountPath: /sys/fs/bpf
               name: sys-fs-bpf
               mountPropagation: Bidirectional
 
+            # Needed to attach probes via tracefs.
             - mountPath: /sys/kernel/debug
               name: sys-kernel-debug
 
@@ -66,6 +77,8 @@ spec:
         - name: sys-fs-bpf
           hostPath:
             path: /sys/fs/bpf
+            # More forgiving than Beyla, which needs the directory to
+            # exist already.
             type: DirectoryOrCreate
         - name: sys-kernel-debug
           hostPath:

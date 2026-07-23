@@ -5,16 +5,27 @@ metadata:
 data:
   obi-config.yml: |
     otel_traces_export:
+      # Tempo running in Docker on the host. host.minikube.internal only
+      # resolves under minikube; on a real cluster point this at a Service.
       endpoint: http://host.minikube.internal:4317
       sampler:
         name: parentbased_traceidratio
+        # Half the traces are dropped before export. Raise to "1.0" while
+        # debugging: a dropped span and a missing span look the same in
+        # the UI.
         arg: "0.50"
     discovery:
+      # OBI can see every process on the node, so scope it or you will be
+      # tracing the control plane too. This runs alongside the
+      # OTEL_EBPF_AUTO_TARGET_EXE filter set in OBI.yaml.
       instrument:
         - k8s_namespace: 'ebpf-poc'
       exclude_instrument:
         - k8s_namespace: 'kube-system'
     attributes:
       select:
+        # Keep all attributes on database spans rather than the trimmed
+        # default set. Getting SQL spans at all still depends on the
+        # agent picking up the JDBC traffic.
         sql_client_duration:
           include: ['*']

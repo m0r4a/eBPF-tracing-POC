@@ -1,15 +1,25 @@
 #!/bin/bash
+#
+# One request per endpoint, then a short burst to show the injected
+# errors, then the last transaction lines from both services.
+#
+# Two things to expect. The create-user step posts a fixed address and
+# the email column is unique, so it succeeds once and returns 500 on
+# every later run against the same database. And the reads only return
+# data if you seeded the database first; see the README.
+#
+# Uses `minikube service`, so it only works on minikube.
 
 set -e
 
 NAMESPACE="ebpf-poc"
 SERVICE="java8-gateway"
 
-echo "Obteniendo URL del gateway..."
+echo "Getting the gateway URL..."
 GATEWAY_URL=$(minikube service $SERVICE -n $NAMESPACE --url 2>/dev/null)
 
 if [ -z "$GATEWAY_URL" ]; then
-    echo "Error: No se pudo obtener la URL del servicio"
+    echo "Error: could not get the service URL"
     exit 1
 fi
 
@@ -57,6 +67,8 @@ test_endpoint "Get Orders User 1" "GET" "/api/orders/1"
 
 test_endpoint "Get Orders User 3" "GET" "/api/orders/3"
 
+# Both services fail a percentage of requests on purpose, so a few
+# errors here are the expected result, not a broken deployment.
 echo "Testing error injection (10 requests)..."
 success=0
 errors=0

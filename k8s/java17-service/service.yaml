@@ -7,6 +7,8 @@ metadata:
     app: java17-service
     tier: backend
 spec:
+  # Internal only. Reaching it means going through the gateway, which is
+  # what makes the traces two hops deep.
   type: ClusterIP
   ports:
   - port: 8080

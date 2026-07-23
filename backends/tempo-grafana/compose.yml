@@ -1,51 +1,57 @@
+# Trace backend for the eBPF agents. Runs on the host rather than in the
+# cluster; agents inside minikube reach it via host.minikube.internal.
+#
+# Container names and ports are fixed. If you already run a Grafana on
+# 3000, or anything named tempo/grafana, change them here first.
 services:
   tempo:
-    image: grafana/tempo:2.10.5
+    image: grafana/tempo:3.0.2
     container_name: tempo
-    command: 
+    command:
       - "-config.file=/etc/tempo.yaml"
     restart: unless-stopped
     volumes:
       - ./config/tempo.yaml:/etc/tempo.yaml:ro
       - tempo-data-2:/var/tempo
     ports:
-      - "3200:3200"   # Tempo UI/API
-      - "4317:4317"   # OTLP gRPC (OBI → Tempo)
+      - "3200:3200"   # UI and API, also serves /ready
+      - "4317:4317"   # OTLP gRPC, where the agents send spans
       - "4318:4318"   # OTLP HTTP
-      #- "9411:9411"   # Zipkin (opcional)
-      #- "14268:14268" # Jaeger ingest (opcional)
+      #- "9411:9411"   # Zipkin, if you need it
+      #- "14268:14268" # Jaeger ingest, if you need it
     networks:
       - observability
-    # healthcheck:
-    #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/ready"]
-    #   interval: 10s
-    #   timeout: 5s
-    #   retries: 5
-    #   start_period: 15s
+    # No healthcheck: the Tempo image is distroless, so there is no shell
+    # or wget to run one with. Check readiness yourself with
+    # `curl localhost:3200/ready`.
     environment:
+      # Tempo will otherwise size its worker pools to every core on the
+      # host, which is a lot of threads for a local test backend.
       - GOMAXPROCS=2
 
   grafana:
-    image: grafana/grafana:13.0.1
+    image: grafana/grafana:13.1.1
     container_name: grafana
     restart: unless-stopped
-    # depends_on:
-    #   tempo:
-    #     condition: service_healthy
+    # Nothing to wait on without a Tempo healthcheck, so Grafana starts
+    # whichever way. An empty datasource right after `up` usually just
+    # means Tempo is still coming up.
     volumes:
       - grafana-data:/var/lib/grafana
+      # Provisioning is why Grafana needs no click-through setup.
       - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
     ports:
       - "3000:3000"
     networks:
       - observability
     environment:
+      # Throwaway credentials for a local backend. Do not copy this into
+      # anything that is reachable from outside your machine.
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_SERVER_ROOT_URL=http://localhost:3000
       - GF_INSTALL_PLUGINS=
-      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
     healthcheck:
       test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
       interval: 10s
@@ -54,6 +60,8 @@ services:
       start_period: 15s
 
 volumes:
+  # Traces and dashboards survive `docker compose down`, but not
+  # `down -v`.
   grafana-data:
     driver: local
   tempo-data-2:
@@ -62,4 +70,3 @@ volumes:
 networks:
   observability:
     driver: bridge
-
