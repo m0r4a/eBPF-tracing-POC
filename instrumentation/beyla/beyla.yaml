@@ -1,0 +1,78 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: beyla
+  labels:
+    app: beyla
+spec:
+  selector:
+    matchLabels:
+      app: beyla
+  template:
+    metadata:
+      labels:
+        app: beyla
+    spec:
+      serviceAccountName: beyla # required if you want kubernetes metadata decoration
+      hostPID: true # Required to access the processes on the host
+      containers:
+        - name: beyla
+          image: grafana/beyla:latest
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: false
+          env:
+            # - name: OTEL_EBPF_BPF_DEBUG
+            #   value: "true"
+            - name: BEYLA_LOG_LEVEL
+              value: "DEBUG"
+
+            - name: BEYLA_PRINT_TRACES
+              value: "true"
+
+            # - name: BEYLA_BPF_TRACK_LOOPBACK
+            #   value: "true"
+
+            - name: BEYLA_CONFIG_PATH
+              value: "/config/beyla-config.yml"
+
+            # - name: BEYLA_AUTO_TARGET_EXE
+            #   value: '*/java'
+
+              # required if you want kubernetes metadata decoration
+            - name: BEYLA_KUBE_METADATA_ENABLE
+              value: 'true'
+
+            - name: BEYLA_KUBE_CLUSTER_NAME
+              value: 'minikube-poc'
+
+          volumeMounts:
+            - mountPath: /config
+              name: beyla-config
+            - mountPath: /var/run/beyla
+              name: var-run-beyla
+
+            # pruebas para arreglar un error
+            - mountPath: /sys/fs/bpf
+              name: sys-fs-bpf
+              mountPropagation: Bidirectional
+
+            - mountPath: /sys/kernel/debug
+              name: sys-kernel-debug
+
+      volumes:
+        - name: beyla-config
+          configMap:
+            name: beyla-config
+        - name: var-run-beyla
+          emptyDir: {}
+        - name: sys-fs-bpf
+          hostPath:
+            path: /sys/fs/bpf
+            type: Directory
+        - name: sys-kernel-debug
+          hostPath:
+            path: /sys/kernel/debug
+            type: Directory

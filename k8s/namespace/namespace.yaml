@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: ebpf-poc
+  labels:
+    name: ebpf-poc
+    environment: development

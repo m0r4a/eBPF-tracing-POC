@@ -1,0 +1,23 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: beyla-config
+data:
+  beyla-config.yml: |
+    trace_printer: text
+    otel_traces_export:
+      endpoint: http://jaeger.tracing:4317
+      protocol: grpc
+      instrumentations: ["*"]
+      sampler:
+        name: parentbased_traceidratio
+        arg: "0.5"
+    discovery:
+      instrument:
+        - k8s_namespace: 'ebpf-poc'
+      exclude_instrument:
+        - k8s_namespace: 'kube-system'
+    attributes:
+      select:
+        sql_client_duration:
+          include: ['*']

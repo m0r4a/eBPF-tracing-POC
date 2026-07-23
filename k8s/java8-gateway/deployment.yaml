@@ -1,0 +1,61 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: java8-gateway
+  namespace: ebpf-poc
+  labels:
+    app: java8-gateway
+    tier: frontend
+    version: "1.0.1"
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: java8-gateway
+  template:
+    metadata:
+      labels:
+        app: java8-gateway
+        tier: frontend
+        version: "1.0.1"
+    spec:
+      containers:
+      - name: java8-gateway
+        image: m0r4a/java8-gateway:1.0.1
+        imagePullPolicy: Always
+        ports:
+        - containerPort: 8080
+          name: http
+          protocol: TCP
+        env:
+        - name: BACKEND_SERVICE_URL
+          valueFrom:
+            configMapKeyRef:
+              name: java8-config
+              key: BACKEND_SERVICE_URL
+        envFrom:
+        - configMapRef:
+            name: java8-config
+        resources:
+          requests:
+            memory: "384Mi"
+            cpu: "200m"
+          limits:
+            memory: "768Mi"
+            cpu: "400m"
+        livenessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 45
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+        readinessProbe:
+          httpGet:
+            path: /api/health
+            port: 8080
+          initialDelaySeconds: 20
+          periodSeconds: 5
+          timeoutSeconds: 3
+          failureThreshold: 3

@@ -1,0 +1,8 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: java8-config
+  namespace: ebpf-poc
+data:
+  BACKEND_SERVICE_URL: http://java17-service:8080
+  SPRING_PROFILES_ACTIVE: prod

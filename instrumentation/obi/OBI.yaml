@@ -1,0 +1,73 @@
+---
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: obi
+  labels:
+    app: obi
+spec:
+  selector:
+    matchLabels:
+      app: obi
+  template:
+    metadata:
+      labels:
+        app: obi
+    spec:
+      serviceAccountName: obi # required if you want kubernetes metadata decoration
+      hostPID: true # Required to access the processes on the host
+      containers:
+        - name: obi
+          image: otel/ebpf-instrument:v0.9.0
+          imagePullPolicy: IfNotPresent
+          securityContext:
+            privileged: true
+            readOnlyRootFilesystem: false
+          env:
+            - name: OTEL_EBPF_LOG_LEVEL
+              value: "DEBUG"
+            - name: OTEL_EBPF_BPF_DEBUG
+              value: "true"
+
+            # tell OBI where to find the configuration file
+            - name: OTEL_EBPF_CONFIG_PATH
+              value: '/config/obi-config.yml'
+
+            - name: OTEL_EBPF_AUTO_TARGET_EXE
+              value: '*.jar'
+
+              # required if you want kubernetes metadata decoration
+            - name: OTEL_EBPF_KUBE_METADATA_ENABLE
+              value: 'true'
+
+            - name: OTEL_EBPF_KUBE_CLUSTER_NAME
+              value: 'minikube-poc'
+
+          volumeMounts:
+            - mountPath: /config
+              name: obi-config
+            - mountPath: /var/run/obi
+              name: var-run-obi
+
+            # pruebas para arreglar un error
+            - mountPath: /sys/fs/bpf
+              name: sys-fs-bpf
+              mountPropagation: Bidirectional
+
+            - mountPath: /sys/kernel/debug
+              name: sys-kernel-debug
+
+      volumes:
+        - name: obi-config
+          configMap:
+            name: obi-config
+        - name: var-run-obi
+          emptyDir: {}
+        - name: sys-fs-bpf
+          hostPath:
+            path: /sys/fs/bpf
+            type: DirectoryOrCreate
+        - name: sys-kernel-debug
+          hostPath:
+            path: /sys/kernel/debug
+            type: Directory

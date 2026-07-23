@@ -1,0 +1,65 @@
+services:
+  tempo:
+    image: grafana/tempo:2.10.5
+    container_name: tempo
+    command: 
+      - "-config.file=/etc/tempo.yaml"
+    restart: unless-stopped
+    volumes:
+      - ./config/tempo.yaml:/etc/tempo.yaml:ro
+      - tempo-data-2:/var/tempo
+    ports:
+      - "3200:3200"   # Tempo UI/API
+      - "4317:4317"   # OTLP gRPC (OBI → Tempo)
+      - "4318:4318"   # OTLP HTTP
+      #- "9411:9411"   # Zipkin (opcional)
+      #- "14268:14268" # Jaeger ingest (opcional)
+    networks:
+      - observability
+    # healthcheck:
+    #   test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3200/ready"]
+    #   interval: 10s
+    #   timeout: 5s
+    #   retries: 5
+    #   start_period: 15s
+    environment:
+      - GOMAXPROCS=2
+
+  grafana:
+    image: grafana/grafana:13.0.1
+    container_name: grafana
+    restart: unless-stopped
+    # depends_on:
+    #   tempo:
+    #     condition: service_healthy
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./config/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports:
+      - "3000:3000"
+    networks:
+      - observability
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+      - GF_SERVER_ROOT_URL=http://localhost:3000
+      - GF_INSTALL_PLUGINS=
+      - GF_FEATURE_TOGGLES_ENABLE=traceqlEditor
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/api/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+
+volumes:
+  grafana-data:
+    driver: local
+  tempo-data-2:
+    driver: local
+
+networks:
+  observability:
+    driver: bridge
+
